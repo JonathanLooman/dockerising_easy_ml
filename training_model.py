@@ -16,6 +16,38 @@ from sklearn.cluster import KMeans
 import yaml
 import matplotlib
 
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+
+def evaluate_regression_model(y_true, y_pred, num_features):
+    """
+    Evaluate a regression model and present the metrics in a visually appealing way.
+
+    Parameters:
+    - y_true: Actual target values.
+    - y_pred: Predicted target values.
+    - num_features: Number of features used in the model.
+
+    Returns:
+    - metrics_df: A pandas DataFrame containing the evaluation metrics.
+    """
+
+    # Calculate metrics
+    mae = mean_absolute_error(y_true, y_pred)
+    mse = mean_squared_error(y_true, y_pred)
+    rmse = np.sqrt(mse)
+    r2 = r2_score(y_true, y_pred)
+    adj_r2 = 1 - ((1 - r2) * (len(y_true) - 1) / (len(y_true) - num_features - 1))
+
+    # Create a DataFrame
+    metrics_df = pd.DataFrame({
+        'Metric': ['Mean Absolute Error (MAE)', 'Mean Squared Error (MSE)', 'Root Mean Squared Error (RMSE)', 'R-squared (R2)', 'Adjusted R-squared'],
+        'Value': [mae, mse, rmse, r2, adj_r2]
+    })
+
+    # Style the DataFrame for better visualization
+    metrics_df.style.bar(subset=['Value'], align='mid', color=['#d65f5f', '#5fba7d'])
+
+    return metrics_df
 def save_catboost_model(model, file_path):
     """
     Save a CatBoost model to a specified file path.
@@ -163,8 +195,10 @@ def train_model(df):
             x_samp = x_samp[~x_samp.isna().T.any()]
             x_samp.to_csv('temp_sample.csv')
 
-
-            df_train = data_cleaning(df_train, method=cleaning_method)
+            if df_train.isna().sum().max()/len(df_train)<0.03:
+                df_train = df_train.dropna(how='any')
+            else:
+                df_train = df_train.fillna(df.mode().iloc[0])
 
 
             X_train = df_train.loc[:, columns_used]  # Replace 'target_column_name' with the actual target column name
@@ -230,6 +264,10 @@ def train_model(df):
                 rmse = np.sqrt(mean_squared_error(y_test, y_pred))
                 print("Root Mean Squared Error (RMSE):", rmse)
                 save_catboost_model(regressor, 'catboost_model.cbm')
+                num_features = len(X_train.columns)  # Replace with the actual number of features used in your model
+
+                metrics_df = evaluate_regression_model(y_test, y_pred, num_features)
+                st.write(metrics_df)
                 return regressor
 
             elif model_type == 'Multiclass Classification':
